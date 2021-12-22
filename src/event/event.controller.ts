@@ -1,14 +1,19 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, HttpCode, ValidationPipe, UsePipes } from '@nestjs/common';
 import { EventService } from './event.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 
 @Controller('event')
 export class EventController {
-  constructor(private readonly eventService: EventService) {}
+  constructor(
+    private readonly eventService: EventService,
+  ) {
+  }
 
   @Post()
-  create(@Body() createEventDto: CreateEventDto) {
+  @UsePipes(new ValidationPipe({ groups: ['create'] }))
+  create(
+    @Body() createEventDto: CreateEventDto) {
     return this.eventService.create(createEventDto);
   }
 
@@ -23,11 +28,15 @@ export class EventController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateEventDto: UpdateEventDto) {
+  @UsePipes(new ValidationPipe({ groups: ['update'] }))
+  update(
+    @Param('id') id: string,
+    @Body() updateEventDto: UpdateEventDto) {
     return this.eventService.update(+id, updateEventDto);
   }
 
   @Delete(':id')
+  @HttpCode(204)
   remove(@Param('id') id: string) {
     return this.eventService.remove(+id);
   }
