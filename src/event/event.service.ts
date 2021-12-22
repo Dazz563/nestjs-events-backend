@@ -8,8 +8,6 @@ import { Event } from './entities/event.entity';
 @Injectable()
 export class EventService {
 
-  private events: Event[] = [];
-
   constructor(
     @InjectRepository(Event)
     private readonly repo: Repository<Event>,
