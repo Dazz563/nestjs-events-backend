@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, HttpCode, ValidationPipe, UsePipes, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, HttpCode, ValidationPipe, UsePipes, Logger, Query, NotFoundException } from '@nestjs/common';
 import { EventService } from './event.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { Event } from './entities/event.entity';
+import { ListEvents } from './dto/list.events';
 
 @Controller('event')
 export class EventController {
@@ -22,15 +23,26 @@ export class EventController {
   }
 
   @Get()
-  async findAll(): Promise<Event[]> {
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async findAll(@Query() filter: ListEvents) {
 
-    this.logger.log(`Hit the findAll route`);
+    // this.logger.log(`Hit the findAll route`);
+    // const events = await this.eventService.findAll();
 
-    const events = await this.eventService.findAll();
-
-    this.logger.debug(`Found ${events.length} events`);
+    // Using query builder 
+    const events = await this.eventService.getEventsWithAttendeeCountFilteredPaginated(
+      filter,
+      {
+        total: true,
+        currentPage: filter.page,
+        limit: 10
+      }
+    );
+    // this.logger.debug(`Found ${events.length} events`);
 
     return events;
+
+
   }
 
   @Get(':id')
@@ -51,8 +63,16 @@ export class EventController {
 
   @Delete(':id')
   @HttpCode(204)
-  remove(@Param('id') id: string): Promise<void> {
-    return this.eventService.remove(+id);
+  async remove(@Param('id') id: string): Promise<void> {
+    // return this.eventService.remove(+id);
+
+    // Using query builder 
+    const result = await this.eventService.deleteEvent(+id);
+
+
+    if (result?.affected !== 1) {
+      throw new NotFoundException(`No event exists with id: ${id}`);
+    }
   }
 
   @Post('/add-attendee/:id')

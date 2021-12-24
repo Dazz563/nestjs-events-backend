@@ -60,6 +60,8 @@ export class TrainingController {
     // );
 
     // await this.subjectRepository.save(subject);
+
+    // Using query builder
     await this.subjectRepository.createQueryBuilder('s')
       .update()
       .set({ name: "Confidential" })
