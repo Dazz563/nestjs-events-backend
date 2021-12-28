@@ -1,5 +1,6 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { User } from 'src/auth/entities/user.entity';
 import { paginate, PaginateOptions } from 'src/pagination/paginator';
 import { DeleteResult, Repository } from 'typeorm';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -31,10 +32,11 @@ export class EventService {
     return await this.eventRepo.save(event);
   }
 
-  async create(createEventDto: CreateEventDto): Promise<Event> {
+  async createEvent(createEventDto: CreateEventDto, user: User): Promise<Event> {
 
     return await this.eventRepo.save({
       ...createEventDto,
+      organizer: user,
       when: new Date(createEventDto.when),
     });
   }
@@ -53,8 +55,12 @@ export class EventService {
     return event;
   }
 
-  async update(id: number, updateEventDto: UpdateEventDto) {
+  async update(id: number, updateEventDto: UpdateEventDto, user: User) {
     const event = await this.findOne(id);
+
+    if (event.organizer_Id !== user.id) {
+      throw new ForbiddenException(null, `You are not authorized to change this event`);
+    }
 
     return await this.eventRepo.save({
       ...event,
@@ -63,109 +69,114 @@ export class EventService {
     })
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, user: User): Promise<void> {
     const event = await this.findOne(id);
 
-    await this.eventRepo.remove(event);
+    if (event.organizer_Id !== user.id) {
+      throw new ForbiddenException(null, `You are not authorized to change this event`);
+    }
+
+    const result = await this.eventRepo.remove(event);
+
   }
 
   ///////////////////////////////////////////////////////////////////
   // Using query builder
 
-  private getEventsBaseQuery() {
-    return this.eventRepo
-      .createQueryBuilder('e')
-      .orderBy('e.id', 'DESC');
-  }
+  // private getEventsBaseQuery() {
+  //   return this.eventRepo
+  //     .createQueryBuilder('e')
+  //     .orderBy('e.id', 'DESC');
+  // }
 
-  private async getEventsWithAttendeeCountFiltered(filter?: ListEvents) {
-    let query = this.getEventsWithAttendeeCountQuery();
+  // private async getEventsWithAttendeeCountFiltered(filter?: ListEvents) {
+  //   let query = this.getEventsWithAttendeeCountQuery();
 
-    if (!filter) {
-      return query;
-    }
+  //   if (!filter) {
+  //     return query;
+  //   }
 
-    if (filter.when) {
-      if (filter.when == WhenEventFilter.Today) {
-        query = query.andWhere(
-          `e.when >= CURDATE() AND e.when <= CURDATE() + INTERVAL 1 DAY`
-        )
-      }
-      if (filter.when == WhenEventFilter.Tomorrow) {
-        query = query.andWhere(
-          `e.when >= CURDATE() + INTERVAL 1 DAY AND e.when <= CURDATE() + INTERVAL 2 DAY`
-        )
-      }
-      if (filter.when == WhenEventFilter.ThisWeek) {
-        query = query.andWhere(
-          'YEARWEEK(e.when, 1) = YEARWEEK(CURDATE(), 1)'
-        )
-      }
-      if (filter.when == WhenEventFilter.NextWeek) {
-        query = query.andWhere(
-          'YEARWEEK(e.when, 1) = YEARWEEK(CURDATE(), 1) + 1)'
-        )
-      }
-    }
+  //   if (filter.when) {
+  //     if (filter.when == WhenEventFilter.Today) {
+  //       query = query.andWhere(
+  //         `e.when >= CURDATE() AND e.when <= CURDATE() + INTERVAL 1 DAY`
+  //       )
+  //     }
+  //     if (filter.when == WhenEventFilter.Tomorrow) {
+  //       query = query.andWhere(
+  //         `e.when >= CURDATE() + INTERVAL 1 DAY AND e.when <= CURDATE() + INTERVAL 2 DAY`
+  //       )
+  //     }
+  //     if (filter.when == WhenEventFilter.ThisWeek) {
+  //       query = query.andWhere(
+  //         'YEARWEEK(e.when, 1) = YEARWEEK(CURDATE(), 1)'
+  //       )
+  //     }
+  //     if (filter.when == WhenEventFilter.NextWeek) {
+  //       query = query.andWhere(
+  //         'YEARWEEK(e.when, 1) = YEARWEEK(CURDATE(), 1) + 1)'
+  //       )
+  //     }
+  //   }
 
-    return await query;
-  }
+  //   return await query;
+  // }
 
-  public async getEventsWithAttendeeCountFilteredPaginated(
-    filter: ListEvents,
-    paginateOptions: PaginateOptions
-  ) {
-    return await paginate(
-      await this.getEventsWithAttendeeCountFiltered(filter),
-      paginateOptions
-    )
-  }
+  // public async getEventsWithAttendeeCountFilteredPaginated(
+  //   filter: ListEvents,
+  //   paginateOptions: PaginateOptions
+  // ) {
+  //   return await paginate(
+  //     await this.getEventsWithAttendeeCountFiltered(filter),
+  //     paginateOptions
+  //   )
+  // }
 
-  public async getEvent(id: number): Promise<Event | undefined> {
-    const query = this.getEventsWithAttendeeCountQuery()
-      .andWhere('e.id = :id', { id })
+  // public async getEvent(id: number): Promise<Event | undefined> {
+  //   const query = this.getEventsWithAttendeeCountQuery()
+  //     .andWhere('e.id = :id', { id })
 
-    // this.logger.debug(query.getSql());
+  //   // this.logger.debug(query.getSql());
 
-    return await query.getOne();
-  }
+  //   return await query.getOne();
+  // }
 
-  public getEventsWithAttendeeCountQuery() {
-    return this.getEventsBaseQuery()
-      .loadRelationCountAndMap(
-        'e.attendeeCount', 'e.attendees'
-      )
-      .loadRelationCountAndMap(
-        'e.attendeeAccepted',
-        'e.attendees',
-        'attendee',
-        (qb) => qb
-          .where('attendee.answer = :answer',
-            { answer: AttendeeAnswerEnum.Accepted })
-      )
-      .loadRelationCountAndMap(
-        'e.attendeeMaybe',
-        'e.attendees',
-        'attendee',
-        (qb) => qb
-          .where('attendee.answer = :answer',
-            { answer: AttendeeAnswerEnum.Maybe })
-      )
-      .loadRelationCountAndMap(
-        'e.attendeerejected',
-        'e.attendees',
-        'attendee',
-        (qb) => qb
-          .where('attendee.answer = :answer',
-            { answer: AttendeeAnswerEnum.Rejected })
-      )
-  }
+  // public getEventsWithAttendeeCountQuery() {
+  //   return this.getEventsBaseQuery()
+  //     .loadRelationCountAndMap(
+  //       'e.attendeeCount', 'e.attendees'
+  //     )
+  //     .loadRelationCountAndMap(
+  //       'e.attendeeAccepted',
+  //       'e.attendees',
+  //       'attendee',
+  //       (qb) => qb
+  //         .where('attendee.answer = :answer',
+  //           { answer: AttendeeAnswerEnum.Accepted })
+  //     )
+  //     .loadRelationCountAndMap(
+  //       'e.attendeeMaybe',
+  //       'e.attendees',
+  //       'attendee',
+  //       (qb) => qb
+  //         .where('attendee.answer = :answer',
+  //           { answer: AttendeeAnswerEnum.Maybe })
+  //     )
+  //     .loadRelationCountAndMap(
+  //       'e.attendeerejected',
+  //       'e.attendees',
+  //       'attendee',
+  //       (qb) => qb
+  //         .where('attendee.answer = :answer',
+  //           { answer: AttendeeAnswerEnum.Rejected })
+  //     )
+  // }
 
-  public async deleteEvent(id: number): Promise<DeleteResult> {
-    return await this.eventRepo
-      .createQueryBuilder('e')
-      .delete()
-      .where('id = : id', { id })
-      .execute();
-  }
+  // public async deleteEvent(id: number): Promise<DeleteResult> {
+  //   return await this.eventRepo
+  //     .createQueryBuilder('e')
+  //     .delete()
+  //     .where('id = : id', { id })
+  //     .execute();
+  // }
 }

@@ -1,22 +1,35 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, SerializeOptions, ClassSerializerInterceptor, UseInterceptors } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { AuthGuardJwt } from './auth-guard.jwt';
+import { AuthGuardLocal } from './auth-guard.local';
 import { AuthService } from './auth.service';
+import { CurrentUser } from './current-user.decorator';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { UpdateAuthDto } from './dto/update-auth.dto';
+import { User } from './entities/user.entity';
 
 @Controller('auth')
+@SerializeOptions({ strategy: 'excludeAll' })
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
   ) { }
 
   @Post('/login')
-  @UseGuards(AuthGuard('local'))
-  login(@Request() request) {
+  @UseGuards(AuthGuardLocal)
+  login(@CurrentUser() user: User) {
     return {
-      userId: request.user.id,
-      token: this.authService.getTokenForUser(request.user),
+      userId: user.id,
+      token: this.authService.getTokenForUser(user),
     };
+  }
+
+
+  @Get('/profile')
+  @UseGuards(AuthGuardJwt)
+  @UseInterceptors(ClassSerializerInterceptor)
+  async getProfile(@CurrentUser() user: User) {
+    return user;
   }
 
   // @Get()

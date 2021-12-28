@@ -6,12 +6,14 @@ import { User } from './entities/user.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { LocalStrategy } from './local.strategy';
 import { JwtModule } from '@nestjs/jwt';
+import { JwtStrategy } from './jwt.stategy';
+import { UsersController } from './users.controller';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       User,
-      Profile
+      Profile,
     ]),
     JwtModule.registerAsync({
       useFactory: () => ({
@@ -22,7 +24,10 @@ import { JwtModule } from '@nestjs/jwt';
       })
     })
   ],
-  controllers: [AuthController],
-  providers: [AuthService, LocalStrategy]
+  controllers: [
+    AuthController,
+    UsersController
+  ],
+  providers: [AuthService, LocalStrategy, JwtStrategy]
 })
 export class AuthModule { }
